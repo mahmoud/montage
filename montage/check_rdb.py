@@ -3,7 +3,11 @@ from sqlalchemy import exc
 from sqlalchemy import event
 from sqlalchemy import select
 from sqlalchemy import inspect
-from sqlalchemy.ext.declarative.clsregistry import _ModuleMarker
+try:
+    from sqlalchemy.ext.declarative.clsregistry import _ModuleMarker
+except ImportError:
+    # SQLAlchemy 1.4+ moved this
+    from sqlalchemy.orm.clsregistry import _ModuleMarker
 from sqlalchemy.orm import RelationshipProperty
 
 
@@ -31,7 +35,15 @@ def get_schema_errors(base_type, session):
     tables = iengine.get_table_names()
 
     # Go through all SQLAlchemy models
-    for name, model_type in base_type._decl_class_registry.items():
+    # Handle different registry access patterns for different SQLAlchemy versions
+    if hasattr(base_type, '_decl_class_registry'):
+        # SQLAlchemy < 1.4
+        registry_items = base_type._decl_class_registry.items()
+    else:
+        # SQLAlchemy 1.4+
+        registry_items = base_type.registry._class_registry.items()
+    
+    for name, model_type in registry_items:
 
         if isinstance(model_type, _ModuleMarker):
             # Not a model
