@@ -377,12 +377,12 @@ class Round(Base):
                                     .filter_by(round_id=self.id)\
                                     .filter(RoundEntry.dq_reason != None)\
                                     .count()
-        all_mimes = rdb_session.query(Entry.mime_minor)\
+        all_mimes = [row[0] for row in rdb_session.query(Entry.mime_minor)\
                                     .join(RoundEntry)\
                                     .distinct(Entry.mime_minor)\
                                     .filter_by(round_id=self.id)\
                                     .filter(RoundEntry.dq_reason == None)\
-                                    .all()
+                                    .all()]
 
         if task_count:
             percent_open = round((100.0 * open_task_count) / task_count, 3)
@@ -1978,8 +1978,8 @@ class CoordinatorDAO(UserDAO):
     def get_all_tasks(self, round_id):
         results = self.query(Vote, Entry)\
                       .options(joinedload('user'))\
-                      .join(RoundEntry)\
-                      .join(Entry)\
+                      .join(RoundEntry, Vote.round_entry_id == RoundEntry.id)\
+                      .join(Entry, RoundEntry.entry_id == Entry.id)\
                       .filter(RoundEntry.round_id == round_id,
                               RoundEntry.dq_user_id == None,
                               Vote.status != CANCELLED_STATUS)\
@@ -2794,23 +2794,6 @@ class JurorDAO(object):
         rating_ctr = Counter([r[1] for r in results])
 
         return dict(rating_ctr)
-
-    def apply_rating(self, vote, value, review=''):
-        if not vote.user == self.user:
-            # belt and suspenders until server test covers the cross
-            # complete case
-            raise PermissionDenied()
-        now = datetime.datetime.utcnow()
-        review_stripped = review.strip()
-        if len(review_stripped) > 8192:
-            raise ValueError('review must be less than 8192 characters, not %r'
-                             % len(review_stripped))
-        if review_stripped:
-            vote['flags']['review'] = review_stripped
-        vote.complete_date = now
-        vote.status = COMPLETED_STATUS
-        self.rdb_session.add(vote)
-        return vote
 
     def edit_rating(self, task, value, review=''):
         if not task.user == self.user:
