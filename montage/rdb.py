@@ -2723,16 +2723,23 @@ class JurorDAO(object):
         )
 
         def tasks_query(where):
+            # Create a more explicit join to avoid ambiguity in SQLAlchemy 1.4+
+            join_clause = rounds_t.join(
+                round_jurors_t,
+                onclause=((rounds_t.c.id == round_jurors_t.c.round_id)
+                          & (round_jurors_t.c.user_id == self.user.id))
+            ).outerjoin(
+                round_entries_t,
+                onclause=(rounds_t.c.id == round_entries_t.c.round_id),
+            ).outerjoin(
+                votes_t,
+                onclause=(round_entries_t.c.id == votes_t.c.round_entry_id)
+            )
+            
             return select(
                 [rounds_t.c.id, func.count(votes_t.c.id).label(task_count)],
             ).select_from(
-                user_rounds_join.outerjoin(
-                    round_entries_t,
-                    onclause=(rounds_t.c.id == round_entries_t.c.round_id),
-                ).outerjoin(
-                    votes_t,
-                    onclause=(round_entries_t.c.id == votes_t.c.round_entry_id)
-                )
+                join_clause
             ).where(
                 (votes_t.c.user_id.in_([self.user.id, None])) & where
             ).group_by(
